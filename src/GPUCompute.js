@@ -36,33 +36,19 @@ export class GPUCompute {
       data[i * 4 + 2] = (Math.random() * 2 - 1)
       data[i * 4 + 3] = 1.0
     }
-    const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat, THREE.FloatType)
+    const tex = new THREE.DataTexture(data, this.textureSize, this.textureSize, THREE.RGBAFormat, THREE.FloatType)
     tex.needsUpdate = true
 
-    // 패스스루 셰이더로 float 데이터를 손상 없이 렌더 타겟에 복사
-    const passMat = new THREE.ShaderMaterial({
-      vertexShader: `void main() { gl_Position = vec4(position, 1.0); }`,
-      fragmentShader: `
-        uniform sampler2D uTex;
-        uniform vec2 resolution;
-        void main() {
-          gl_FragColor = texture2D(uTex, gl_FragCoord.xy / resolution);
-        }
-      `,
-      uniforms: {
-        uTex: { value: tex },
-        resolution: { value: new THREE.Vector2(size, size) },
-      },
-    })
-
-    const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), passMat)
+    // Render initial data into read target
+    const initMat = new THREE.MeshBasicMaterial({ map: tex })
+    const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), initMat)
     const scene = new THREE.Scene()
     const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
     scene.add(quad)
     this.renderer.setRenderTarget(this.read)
     this.renderer.render(scene, cam)
     this.renderer.setRenderTarget(null)
-    passMat.dispose()
+    initMat.dispose()
     tex.dispose()
   }
 
@@ -70,7 +56,7 @@ export class GPUCompute {
     this.simUniforms = {
       uPositions:  { value: this.read.texture },
       uTime:       { value: 0 },
-      uSpeed:      { value: 0.01 },
+      uSpeed:      { value: 0.002 },
       uNoiseScale: { value: 1.5 },
       resolution:  { value: new THREE.Vector2(this.textureSize, this.textureSize) },
     }

@@ -11,11 +11,12 @@ const VERT = /* glsl */ `
 const LIFESPAN = 1500;
 
 export class GPUCompute {
-  constructor(renderer, textureSize, aspect = 1) {
+  constructor(renderer, textureSize, aspect = 1, fieldTexture = null) {
     this.renderer = renderer;
     this.textureSize = textureSize;
     this.count = textureSize * textureSize;
     this.aspect = aspect;
+    this.fieldTexture = fieldTexture;
 
     const rtOptions = {
       minFilter: THREE.NearestFilter,
@@ -73,12 +74,11 @@ export class GPUCompute {
   _initQuad() {
     this.simUniforms = {
       uPositions: { value: this.read.texture },
+      uField: { value: this.fieldTexture },
       uTime: { value: 0 },
       uSpeed: { value: 0.003 },
-      uNoiseScale: { value: 3 },
       uAspect: { value: this.aspect },
       uJitter: { value: 0.001 },
-      uEvolve: { value: 0.0 }, // 0 = 고정 벡터 필드, >0 = 시간에 따라 변형
       uLifespan: { value: LIFESPAN },
       resolution: {
         value: new THREE.Vector2(this.textureSize, this.textureSize),

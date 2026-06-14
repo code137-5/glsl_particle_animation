@@ -6,11 +6,27 @@
     <title>GLSL Particle Flow</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { background: #000; overflow: hidden; }
+      body {
+        background: #000;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: ui-monospace, monospace;
+      }
       canvas { display: block; }
+      #hint {
+        position: fixed;
+        bottom: 12px;
+        left: 12px;
+        color: #557766;
+        font-size: 12px;
+        user-select: none;
+      }
     </style>
   </head>
   <body>
+    <div id="hint">드래그: 화살표 방향 편집 · G: 화살표 토글</div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

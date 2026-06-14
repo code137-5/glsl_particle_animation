@@ -66,6 +66,23 @@ float snoise(vec3 v) {
   return 42.0 * dot(m * m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
 }
 
+// 해시 기반 의사난수 — jitter와 재생성 위치에 사용
+vec2 hash22(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.xx + p3.yz) * p3.zy);
+}
+
+// 2D 발산 0(incompressible) Perlin 플로우 필드.
+// 스칼라 노이즈를 흐름함수(streamfunction)로 보고, 그 그래디언트를 90° 돌린 값을 속도로 사용.
+// 발산이 0이라 파티클이 한 점/선으로 수렴하지 않고 노이즈 등고선을 따라 순환함.
+vec3 perlinFlow(vec3 p) {
+  float e = 0.01;
+  float dx = (snoise(p + vec3(e, 0.0, 0.0)) - snoise(p - vec3(e, 0.0, 0.0))) / (2.0 * e);
+  float dy = (snoise(p + vec3(0.0, e, 0.0)) - snoise(p - vec3(0.0, e, 0.0))) / (2.0 * e);
+  return normalize(vec3(dy, -dx, 0.0)); // 그래디언트를 90° 회전 → 등고선 접선 방향
+}
+
 vec3 curlNoise(vec3 p) {
   float e = 0.0001;
 

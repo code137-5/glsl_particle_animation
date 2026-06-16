@@ -40,7 +40,8 @@ function grad(hash, x, y) {
 }
 
 // 결과 범위 ≈ [-1, 1]
-function perlin2(x, y) {
+// DistrictField 등에서 행정동 중심 좌표의 placeholder 벡터를 산정할 때 재사용한다.
+export function perlin2(x, y) {
   const xi = Math.floor(x) & 255;
   const yi = Math.floor(y) & 255;
   const xf = x - Math.floor(x);
@@ -84,7 +85,7 @@ export class FlowField {
         const idx = (j * grid + i) * 4;
         data[idx + 0] = vx; // R = x 성분
         data[idx + 1] = vy; // G = y 성분
-        data[idx + 2] = 0;
+        data[idx + 2] = 1; // B = mask (폴백 모드는 도메인 전역이 유효 영역 → 1)
         data[idx + 3] = 1;
 
         this.cells.push({ i, j, vx, vy });

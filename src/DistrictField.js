@@ -143,12 +143,22 @@ export class DistrictField {
   }
 
   // 동 → { dir:[ux,uy] 단위방향, mag:상대강도(>=0) }. 실데이터 우선, 없으면 placeholder.
-  //   ⇒ 추후 Python 이 properties.vx/vy(또는 angle[+strength])를 채우면 자동 교체됨.
+  //   ⇒ Python 이 properties.vector_x_wmean/vector_y_wmean(또는 vx/vy, angle[+strength])를
+  //      채우면 자동 교체됨.
   _districtVectorRaw(feature, centroid) {
     const p = feature.properties || {};
     const seed =
       p.ADM_CD != null ? String(p.ADM_CD) : `${centroid.x},${centroid.y}`;
 
+    // 실데이터: vector_x_wmean/vector_y_wmean (방향만 사용, 세기 무시 → mag=1 통일)
+    if (
+      typeof p.vector_x_wmean === "number" &&
+      typeof p.vector_y_wmean === "number"
+    ) {
+      const L = Math.hypot(p.vector_x_wmean, p.vector_y_wmean);
+      if (L < 1e-9) return { dir: [1, 0], mag: 1 };
+      return { dir: [p.vector_x_wmean / L, p.vector_y_wmean / L], mag: 1 };
+    }
     // 실데이터: vx/vy 의 길이가 곧 강도
     if (typeof p.vx === "number" && typeof p.vy === "number") {
       const L = Math.hypot(p.vx, p.vy);

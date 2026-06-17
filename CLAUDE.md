@@ -60,7 +60,7 @@ DistrictField.texture  ─┐   ┌─ FlowField.texture
 - 경로: `public/seoul_dong.geojson` (Vite가 `/seoul_dong.geojson`로 서빙). 없으면 콘솔 경고 후 Perlin 격자로 폴백.
 - 좌표계: lon/lat 또는 미터 투영(현재 파일은 **EPSG:5186**) 자동 감지. bbox 등방 선형 투영이라 벡터는 **폴리곤과 같은 CRS**(=5186) 축 성분으로 주면 화면 각도가 그대로 맞음(easting→오른쪽, northing→위). `Polygon`/`MultiPolygon` 지원.
 - **방향 × 강도 구조**: 필드 텍스처 `R=vx,G=vy`는 단위방향 × strength(길이=상대속도), `B=mask`. 동별 강도는 최댓값 정규화 후 `[strengthFloor,1]` 로 매핑되어 가장 센 동이 전역 `uSpeed`.
-- **실데이터 연동 지점**: `DistrictField._districtVectorRaw()` — feature `properties`에 `vx/vy`(길이=강도) 또는 `angle`(+`strength`/`mag`)가 있으면 placeholder 대신 자동 사용. Python은 이 속성만 채우면 됨.
+- **실데이터 연동 지점**: `DistrictField._districtVectorRaw()` — feature `properties`에 `vector_x_wmean`/`vector_y_wmean`(현재 파일이 채우고 있는 실데이터, **방향만 사용·세기 무시 → 균일 속도**), `vx/vy`(길이=강도), 또는 `angle`(+`strength`/`mag`)가 있으면 placeholder 대신 자동 사용. 우선순위는 `vector_x_wmean/y` → `vx/vy` → `angle` 순.
 
 ## 컨벤션
 

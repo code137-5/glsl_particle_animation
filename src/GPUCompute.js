@@ -9,6 +9,9 @@ const VERT = /* glsl */ `
 
 // 파티클 수명(프레임 단위). 이 시간이 지나면 화면 안 랜덤 위치로 재생성됨.
 const LIFESPAN = 1000;
+// 재생성 주기 = 수명의 1/3. 초기 나이를 이 범위에 고르게 분산해 두면
+// 매 프레임 일정 비율씩 계속 재생성돼, 처음 시드처럼 끊김 없이 새 파티클이 생성된다.
+const SPAWN_PERIOD = LIFESPAN / 3;
 
 export class GPUCompute {
   // spawn: { texture, res, interior } — 서울 영역 안 재생성/초기 위치 정보(선택).
@@ -59,7 +62,7 @@ export class GPUCompute {
         data[i * 4 + 1] = Math.random() * 2 - 1; // y ∈ [-1, 1]
       }
       data[i * 4 + 2] = 0.0; // z = 0 (2D 평면)
-      data[i * 4 + 3] = Math.random() * LIFESPAN; // 초기 나이를 무작위로 분산 → 재생성 타이밍 분산
+      data[i * 4 + 3] = Math.random() * SPAWN_PERIOD; // 초기 나이를 주기 안에 분산 → 재생성이 매 프레임 고르게 일어남
     }
     const tex = new THREE.DataTexture(
       data,
@@ -115,7 +118,7 @@ export class GPUCompute {
       uSpeed: { value: 0.001 },
       uAspect: { value: this.aspect },
       uJitter: { value: 0.001 },
-      uLifespan: { value: LIFESPAN },
+      uSpawnPeriod: { value: SPAWN_PERIOD },
       resolution: {
         value: new THREE.Vector2(this.textureSize, this.textureSize),
       },

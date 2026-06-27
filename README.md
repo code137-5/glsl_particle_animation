@@ -48,6 +48,7 @@ npm run preview  # 빌드 결과 미리보기
 - `src/GPUCompute.js` — GPGPU 파티클 시뮬레이션 (ping-pong 렌더타깃)
 - `src/shaders/simulation.glsl` — 파티클 위치 갱신 셰이더
 - `src/FlowField.js` — Perlin 격자 폴백 필드
+- `src/noise2d.js` — 2D Perlin noise(`perlin2`), FlowField·DistrictField 공용
 - `src/main.js` — 진입점, 씬 구성 및 렌더 루프
 
 ## 기술 스택

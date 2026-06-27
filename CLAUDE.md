@@ -15,7 +15,10 @@ velocity로 적용받아 흐른다. 동별 실제 벡터(예: 30분 이내 이�
 - **번들러**: Vite 6 (ES 모듈). 셰이더는 `vite-plugin-glsl`로 `.glsl`을 문자열 import.
 - **렌더링**: Three.js (r0.176). 오쏘 카메라 2D, GPGPU는 ping-pong 렌더타깃.
 - 명령: `npm install` → `npm run dev`(개발 서버) / `npm run build` / `npm run preview`
-- 조작: **G 키** = 벡터필드 오버레이(경계선+화살표) 토글.
+- 조작: **G 키** = 벡터필드 오버레이(경계선+화살표) 토글. **좌상단 버튼** = 모드 전환(서울 행정동 ↔ 그리드).
+- **모드 전환**: 시작 시 두 필드(DistrictField + FlowField)를 모두 생성하고, 둘이 **같은 aspect(서울 종횡비)**를
+  공유한다. 버튼 클릭 시 카메라/캔버스는 그대로 두고 `GPUCompute.setField()`로 필드 텍스처·스폰만
+  교체(파티클 재시드)한다. GeoJSON 로드 실패 시 그리드 단독 + 버튼 숨김.
 
 ## 데이터 흐름 (핵심)
 
@@ -40,10 +43,11 @@ DistrictField.texture  ─┐   ┌─ FlowField.texture
 
 | 파일 | 책임 |
 |---|---|
-| `src/main.js` | 진입점. 필드 로드(async) → 렌더러/카메라/씬/트레일/오버레이 구성 → 애니메이션 루프. `createField()`가 DistrictField 우선, 실패 시 FlowField 폴백. |
+| `src/main.js` | 진입점. `buildModes()`가 두 모드(서울/그리드)를 모두 생성(공유 aspect) → 렌더러/카메라/씬/트레일 구성 → `applyMode()`로 모드 적용·버튼 토글 → 애니메이션 루프. GeoJSON 실패 시 그리드 단독. |
 | `src/DistrictField.js` | **핵심.** GeoJSON 로드·투영·동별 벡터 산정·폴리곤 래스터화 → `texture`(필드)·`spawnTexture`·`interior`(서울 안 위치)·`buildBoundaries()`/`buildArrows()`(오버레이) 생성. |
-| `src/FlowField.js` | 폴백용 Perlin 격자 필드. `perlin2()`를 export(DistrictField가 동별 벡터에 재사용). |
-| `src/GPUCompute.js` | GPGPU 시뮬레이션. read/write 렌더타깃 ping-pong, `simUniforms`, 초기 위치 시드(서울 안 `interior` 사용), spawn 텍스처 관리. |
+| `src/FlowField.js` | 폴백용 Perlin 격자 필드. `noise2d.js`의 `perlin2()`로 셀 방향을 만든다. |
+| `src/noise2d.js` | 2D Perlin noise(`perlin2`). FlowField·DistrictField 공용 — 동별 placeholder 벡터에 재사용. |
+| `src/GPUCompute.js` | GPGPU 시뮬레이션. read/write 렌더타깃 ping-pong, `simUniforms`, 초기 위치 시드(서울 안 `interior` 사용), spawn 텍스처 관리. `setField()`로 런타임 모드 전환(필드/스폰 교체 + 재시드). |
 | `src/shaders/simulation.glsl` | 파티클 갱신 셰이더. uField 샘플 → 이동 → 화면밖/수명/마스크밖이면 uSpawn에서 재생성. |
 | `src/shaders/particle.vert/frag.glsl` | 위치 텍스처에서 좌표 읽어 점 렌더, 원형 글로우. |
 | `src/shaders/noise.glsl` | snoise/hash22 등 유틸(시뮬에서 hash22 사용). |

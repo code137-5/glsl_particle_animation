@@ -15,36 +15,51 @@ const TEXTURE_SIZE = 128;
 // GeoJSON 경로 (Vite는 public/ 를 루트로 서빙)
 const GEOJSON_URL = "/seoul_dong.geojson";
 
-// ── 벡터필드 생성 ────────────────────────────────────────────────────────────
-// 서울 행정동 GeoJSON 기반(DistrictField)을 우선 시도, 실패하면 Perlin 격자로 폴백.
-// 반환: { texture, aspect, spawn, overlays } — 이후 파이프라인은 동일하게 동작.
-async function createField() {
+// ── 벡터필드 모드 생성 ───────────────────────────────────────────────────────
+// 두 모드를 모두 만들어 둔다(버튼으로 런타임 토글). 두 모드는 같은 aspect(서울 종횡비)를
+// 공유하므로 토글해도 카메라/캔버스가 흔들리지 않는다.
+//   · 서울 행정동(DistrictField): GeoJSON 로드 성공 시에만. interior 기반 스폰.
+//   · 그리드(FlowField): Perlin 격자. 서울 aspect로 그려 캔버스를 공유.
+// 반환: { modes:[{name,texture,spawn,overlays}], aspect }. GeoJSON 실패 시 그리드 단독.
+async function buildModes() {
+  let district = null;
+  let aspect = 1;
   try {
     const df = await DistrictField.load(GEOJSON_URL);
     console.log(
       `행정동 ${df.districts.length}개 로드 · aspect=${df.aspect.toFixed(3)}`,
     );
-    return {
+    aspect = df.aspect;
+    district = {
+      name: "서울 행정동",
       texture: df.texture,
-      aspect: df.aspect,
-      spawn: { texture: df.spawnTexture, res: df.spawnRes, interior: df.interior },
+      spawn: {
+        texture: df.spawnTexture,
+        res: df.spawnRes,
+        interior: df.interior,
+      },
       overlays: [df.buildBoundaries(), df.buildArrows()],
     };
   } catch (e) {
-    console.warn(`GeoJSON 로드 실패 → Perlin 격자 폴백: ${e.message}`);
-    const ff = new FlowField(GRID, 0.2, Math.PI);
-    return {
-      texture: ff.texture,
-      aspect: 1,
-      spawn: null,
-      overlays: [ff.buildGrid(), ff.buildArrows()],
-    };
+    console.warn(`GeoJSON 로드 실패 → 그리드 단독: ${e.message}`);
   }
+
+  // 그리드 모드는 서울 aspect(없으면 1)로 생성 → 캔버스 비율 공유
+  const ff = new FlowField(GRID, 0.2, Math.PI, aspect);
+  const grid = {
+    name: "그리드",
+    texture: ff.texture,
+    spawn: null,
+    overlays: [ff.buildGrid(), ff.buildArrows()],
+  };
+
+  const modes = district ? [district, grid] : [grid];
+  return { modes, aspect };
 }
 
 async function init() {
-  const field = await createField();
-  const aspect = field.aspect;
+  const { modes, aspect } = await buildModes();
+  let current = 0; // 현재 모드 인덱스
 
   // 렌더러 — 종횡비 aspect 에 맞춰 가로 크기 결정
   const renderer = new THREE.WebGLRenderer({ antialias: false });
@@ -58,9 +73,8 @@ async function init() {
   camera.position.set(0, 0, 1);
   const scene = new THREE.Scene();
 
-  // 벡터필드 오버레이 (경계선 + 화살표) — G 키로 토글
+  // 벡터필드 오버레이 (경계선 + 화살표) — G 키로 토글, 모드별로 교체됨(applyMode)
   const overlayScene = new THREE.Scene();
-  field.overlays.forEach((o) => overlayScene.add(o));
   let showField = true;
 
   // 트레일 씬 — 이전 프레임을 서서히 페이드아웃시키는 전체화면 쿼드
@@ -79,9 +93,21 @@ async function init() {
     renderer,
     TEXTURE_SIZE,
     aspect,
-    field.texture,
-    field.spawn,
+    modes[current].texture,
+    modes[current].spawn,
   );
+
+  // 모드 적용: 오버레이를 갈아끼우고 시뮬 필드 텍스처·스폰을 교체(파티클 재시드).
+  let currentOverlays = [];
+  function applyMode(i) {
+    current = i;
+    const mode = modes[i];
+    currentOverlays.forEach((o) => overlayScene.remove(o));
+    currentOverlays = mode.overlays;
+    currentOverlays.forEach((o) => overlayScene.add(o));
+    gpuCompute.setField({ texture: mode.texture, aspect, spawn: mode.spawn });
+  }
+  applyMode(current); // 초기 모드(서울 우선) 적용
 
   // 파티클 지오메트리 — 각 포인트가 GPGPU 텍스처의 UV 좌표를 저장
   function buildParticleGeometry(size) {
@@ -126,6 +152,25 @@ async function init() {
   window.addEventListener("keydown", (e) => {
     if (e.key === "g" || e.key === "G") showField = !showField;
   });
+
+  // 화면 위 버튼 — 클릭하면 다음 모드로 전환. 모드가 하나뿐이면 숨김.
+  const modeButton = document.createElement("button");
+  modeButton.style.cssText =
+    "position:fixed;top:12px;left:12px;z-index:10;padding:8px 14px;" +
+    "font:14px/1.2 sans-serif;color:#cfe;background:rgba(20,30,40,0.7);" +
+    "border:1px solid #3a5;border-radius:6px;cursor:pointer;";
+  const updateButtonLabel = () => {
+    modeButton.textContent = `모드: ${modes[current].name}`;
+  };
+  updateButtonLabel();
+  if (modes.length < 2) {
+    modeButton.style.display = "none"; // 전환 대상 없음
+  }
+  modeButton.addEventListener("click", () => {
+    applyMode((current + 1) % modes.length);
+    updateButtonLabel();
+  });
+  document.body.appendChild(modeButton);
 
   // 애니메이션 루프
   const clock = new THREE.Clock();

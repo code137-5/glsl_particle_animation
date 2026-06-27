@@ -1,63 +1,5 @@
 import * as THREE from "three";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 2D Perlin noise (Ken Perlin의 improved noise) — 고정 순열 테이블이라 매번 같은 필드
-// ─────────────────────────────────────────────────────────────────────────────
-const P = [
-  151, 160, 137, 91, 90, 15, 131, 13, 201, 95, 96, 53, 194, 233, 7, 225, 140,
-  36, 103, 30, 69, 142, 8, 99, 37, 240, 21, 10, 23, 190, 6, 148, 247, 120, 234,
-  75, 0, 26, 197, 62, 94, 252, 219, 203, 117, 35, 11, 32, 57, 177, 33, 88, 237,
-  149, 56, 87, 174, 20, 125, 136, 171, 168, 68, 175, 74, 165, 71, 134, 139, 48,
-  27, 166, 77, 146, 158, 231, 83, 111, 229, 122, 60, 211, 133, 230, 220, 105,
-  92, 41, 55, 46, 245, 40, 244, 102, 143, 54, 65, 25, 63, 161, 1, 216, 80, 73,
-  209, 76, 132, 187, 208, 89, 18, 169, 200, 196, 135, 130, 116, 188, 159, 86,
-  164, 100, 109, 198, 173, 186, 3, 64, 52, 217, 226, 250, 124, 123, 5, 202, 38,
-  147, 118, 126, 255, 82, 85, 212, 207, 206, 59, 227, 47, 16, 58, 17, 182, 189,
-  28, 42, 223, 183, 170, 213, 119, 248, 152, 2, 44, 154, 163, 70, 221, 153, 101,
-  155, 167, 43, 172, 9, 129, 22, 39, 253, 19, 98, 108, 110, 79, 113, 224, 232,
-  178, 185, 112, 104, 218, 246, 97, 228, 251, 34, 242, 193, 238, 210, 144, 12,
-  191, 179, 162, 241, 81, 51, 145, 235, 249, 14, 239, 107, 49, 192, 214, 31,
-  181, 199, 106, 157, 184, 84, 204, 176, 115, 121, 50, 45, 127, 4, 150, 254,
-  138, 236, 205, 93, 222, 114, 67, 29, 24, 72, 243, 141, 128, 195, 78, 66, 215,
-  61, 156, 180,
-];
-const PERM = new Uint8Array(512);
-for (let i = 0; i < 512; i++) PERM[i] = P[i & 255];
-
-const fade = (t) => t * t * t * (t * (t * 6 - 15) + 10);
-const lerp = (a, b, t) => a + t * (b - a);
-function grad(hash, x, y) {
-  switch (hash & 3) {
-    case 0:
-      return x + y;
-    case 1:
-      return -x + y;
-    case 2:
-      return x - y;
-    default:
-      return -x - y;
-  }
-}
-
-// 결과 범위 ≈ [-1, 1]
-// DistrictField 등에서 행정동 중심 좌표의 placeholder 벡터를 산정할 때 재사용한다.
-export function perlin2(x, y) {
-  const xi = Math.floor(x) & 255;
-  const yi = Math.floor(y) & 255;
-  const xf = x - Math.floor(x);
-  const yf = y - Math.floor(y);
-  const u = fade(xf);
-  const v = fade(yf);
-  const aa = PERM[PERM[xi] + yi];
-  const ab = PERM[PERM[xi] + yi + 1];
-  const ba = PERM[PERM[xi + 1] + yi];
-  const bb = PERM[PERM[xi + 1] + yi + 1];
-  return lerp(
-    lerp(grad(aa, xf, yf), grad(ba, xf - 1, yf), u),
-    lerp(grad(ab, xf, yf - 1), grad(bb, xf - 1, yf - 1), u),
-    v,
-  );
-}
+import { perlin2 } from "./noise2d.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FlowField — 12×12 그리드의 각 셀에 perlin 값을 줘서 방향 벡터필드를 만든다.
@@ -69,8 +11,11 @@ export class FlowField {
   // noiseScale  : 작을수록 셀들이 noise 공간에서 가깝게 샘플링됨 → 필드가 매끄러움(저주파).
   // angleMul    : noise 값을 각도로 바꾸는 배율. 작을수록 이웃 셀 간 방향 변화가 완만함.
   //               (이전엔 scale=0.45·angleMul=2π라 이웃끼리 평균 91°씩 튀어 거칠어 보였음)
-  constructor(grid = 12, noiseScale = 0.2, angleMul = Math.PI) {
+  // aspect : 오버레이를 그릴 도메인 가로 반폭. x∈[-aspect,aspect], y∈[-1,1].
+  //           텍스처(grid×grid 단위벡터)는 정규화 UV로 샘플되므로 aspect와 무관.
+  constructor(grid = 12, noiseScale = 0.2, angleMul = Math.PI, aspect = 1) {
     this.grid = grid;
+    this.aspect = aspect;
     this.cells = []; // 화살표용: { i, j, vx, vy }
 
     const data = new Float32Array(grid * grid * 4);
@@ -108,27 +53,27 @@ export class FlowField {
     this.texture.needsUpdate = true;
   }
 
-  // 도메인 좌표(x,y ∈ [-1,1])가 속한 셀 인덱스 반환
+  // 도메인 좌표(x∈[-aspect,aspect], y∈[-1,1])가 속한 셀 인덱스 반환
   cellAt(x, y) {
-    const i = Math.floor((x * 0.5 + 0.5) * this.grid);
+    const i = Math.floor((x / this.aspect * 0.5 + 0.5) * this.grid);
     const j = Math.floor((y * 0.5 + 0.5) * this.grid);
     const clamp = (v) => Math.max(0, Math.min(this.grid - 1, v));
     return { i: clamp(i), j: clamp(j) };
   }
 
-  // 셀 중심의 도메인 좌표
+  // 셀 중심의 도메인 좌표 (가로는 aspect로 확장, 세로는 [-1,1])
   cellCenter(i, j) {
-    const cell = 2.0 / this.grid;
-    return { x: -1 + (i + 0.5) * cell, y: -1 + (j + 0.5) * cell };
+    const cellX = (2.0 * this.aspect) / this.grid;
+    const cellY = 2.0 / this.grid;
+    return { x: -this.aspect + (i + 0.5) * cellX, y: -1 + (j + 0.5) * cellY };
   }
 
   // 한 셀의 화살표 정점 18개(선분 3개 = 본체 + 화살촉 2)를 out[offset..]에 기록
   _writeArrow(c, out, offset) {
-    const cell = 2.0 / this.grid;
-    const len = cell * 0.42; // 화살표 본체 길이
+    // 길이는 세로 셀 기준(도메인 단위) — 도메인↔픽셀이 두 축 등방이라 각도가 실제 이동과 일치
+    const len = (2.0 / this.grid) * 0.42; // 화살표 본체 길이
     const head = len * 0.35; // 화살촉 길이
-    const cx = -1 + (c.i + 0.5) * cell;
-    const cy = -1 + (c.j + 0.5) * cell;
+    const { x: cx, y: cy } = this.cellCenter(c.i, c.j);
     const ex = cx + c.vx * len; // 화살표 끝
     const ey = cy + c.vy * len;
     const a = Math.atan2(c.vy, c.vx);
@@ -182,15 +127,18 @@ export class FlowField {
     );
   }
 
-  // 12×12 셀 경계를 그리는 격자선 (선택적 시각화)
+  // 셀 경계를 그리는 격자선 (선택적 시각화). 도메인 x∈[-aspect,aspect], y∈[-1,1].
   buildGrid(color = 0x224433) {
     const grid = this.grid;
-    const cell = 2.0 / grid;
+    const a = this.aspect;
+    const cellX = (2.0 * a) / grid;
+    const cellY = 2.0 / grid;
     const pos = [];
     for (let k = 0; k <= grid; k++) {
-      const t = -1 + k * cell;
-      pos.push(t, -1, 0, t, 1, 0); // 세로선
-      pos.push(-1, t, 0, 1, t, 0); // 가로선
+      const x = -a + k * cellX;
+      pos.push(x, -1, 0, x, 1, 0); // 세로선
+      const y = -1 + k * cellY;
+      pos.push(-a, y, 0, a, y, 0); // 가로선
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));

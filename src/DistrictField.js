@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { perlin2 } from "./FlowField.js";
+import { perlin2 } from "./noise2d.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DistrictField — 서울시 행정동 GeoJSON 경계를 벡터필드로 굽는다(rasterize).

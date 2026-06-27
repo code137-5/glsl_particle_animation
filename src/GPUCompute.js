@@ -156,6 +156,24 @@ export class GPUCompute {
     this.simUniforms.uAspect.value = aspect;
   }
 
+  // 런타임 모드 전환: 필드 텍스처·스폰을 통째로 교체하고 파티클을 재시드한다.
+  //   spawn: { texture, res, interior } 또는 null(도메인 전역). aspect 는 두 모드가 공유.
+  setField({ texture, aspect = this.aspect, spawn = null }) {
+    this.aspect = aspect;
+    this.spawn = spawn;
+    this.fieldTexture = texture;
+    this.simUniforms.uAspect.value = aspect;
+    this.simUniforms.uField.value = texture;
+
+    // 스폰 텍스처 재구성 (district=interior 기반 / grid=도메인 전역 무작위)
+    const spawnTex = this._spawnTexture();
+    this.simUniforms.uSpawn.value = spawnTex;
+    this.simUniforms.uSpawnRes.value.set(this._spawnRes, this._spawnRes);
+
+    // 새 모드 기준으로 초기 위치 재시드 → read 타깃을 덮어쓴다(토글 시 한 번 리셋).
+    this._initPositions();
+  }
+
   get texture() {
     return this.read.texture;
   }
